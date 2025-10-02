@@ -1,7 +1,7 @@
 import ast
 import json
 import time
-import gym
+import gymnasium as gym
 import requests
 from bs4 import BeautifulSoup
 
@@ -41,9 +41,9 @@ class WikiEnv(gym.Env):
   def _get_info(self):
     return {"steps": self.steps, "answer": self.answer}
 
-  def reset(self, seed=None, return_info=False, options=None):
+  def reset(self, seed=None, return_info=False, options=None, idx=None):
     # We need the following line to seed self.np_random
-    # super().reset(seed=seed)
+    super().reset(seed=seed)
     self.obs = ("Interact with Wikipedia using search[], lookup[], and "
                 "finish[].\n")
     self.page = None
@@ -99,27 +99,46 @@ class WikiEnv(gym.Env):
     entity_ = entity.replace(" ", "+")
     search_url = f"https://en.wikipedia.org/w/index.php?search={entity_}"
     old_time = time.time()
-    response_text = requests.get(search_url).text
+    # response = requests.get(search_url)
+    headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/120.0 Safari/537.36"}
+    response = requests.get(search_url, headers=headers)
+
     self.search_time += time.time() - old_time
     self.num_searches += 1
+    response_text = response.text
     soup = BeautifulSoup(response_text, features="html.parser")
+
     result_divs = soup.find_all("div", {"class": "mw-search-result-heading"})
     if result_divs:  # mismatch
-      self.result_titles = [clean_str(div.get_text().strip()) for div in result_divs]
-      self.obs = f"Could not find {entity}. Similar: {self.result_titles[:5]}."
+        self.result_titles = [clean_str(div.get_text().strip()) for div in result_divs]
+        self.obs = f"Could not find {entity}. Similar: {self.result_titles[:5]}."
     else:
-      page = [p.get_text().strip() for p in soup.find_all("p") + soup.find_all("ul")]
-      if any("may refer to:" in p for p in page):
-        self.search_step("[" + entity + "]")
-      else:
-        self.page = ""
-        for p in page:
-          if len(p.split(" ")) > 2:
-            self.page += clean_str(p)
-            if not p.endswith("\n"):
-              self.page += "\n"
-        self.obs = self.get_page_obs(self.page)
-        self.lookup_keyword = self.lookup_list = self.lookup_cnt = None
+        page = [p.get_text().strip() for p in soup.find_all("p") + soup.find_all("ul")]
+        if any("may refer to:" in p for p in page):
+            self.search_step("[" + entity + "]")
+        else:
+            self.page = ""
+            for p in page:
+                if len(p.split(" ")) > 2:
+                    self.page += clean_str(p)
+                    if not p.endswith("\n"):
+                        self.page += "\n"
+            if not self.page.strip():
+                self.obs = f"No Wikipedia content found for {entity}."
+            else:
+                self.obs = self.get_page_obs(self.page)
+            self.lookup_keyword = self.lookup_list = self.lookup_cnt = None
+
+    # Debug print
+    # print("🔎 Search URL:", search_url)
+    # print("🔎 Status:", response.status_code)
+    # print("🔎 Page length:", len(response_text))
+    # print("🔎 First 300 chars:", response_text[:300])
+    # print("🔎 Paragraphs found:", len(soup.find_all('p')))
+
+
   
   def step(self, action):
     reward = 0

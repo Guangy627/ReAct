@@ -1,6 +1,6 @@
 import json
 import os
-import gym
+import gymnasium as gym
 import numpy as np
 import re
 import string
@@ -97,22 +97,30 @@ class HotPotQAWrapper(gym.Wrapper):
     observation = f"Question: {self.data[self.data_idx][0]}"
     info = self._get_info()
     return (observation, info) if return_info else observation
-
+  
   def _get_info(self):
-    return {
-      "steps": self.steps, 
-      "answer": self.answer,
-      "question": self.data[self.data_idx][0], 
-      "hotpot_split": self.split
-    }
+      return {
+        "steps": self.steps, 
+        "answer": self.answer,
+        "question": self.data[self.data_idx][0], 
+        "fever_split": self.split
+      }
+  # def _get_info(self):
+  #     return {
+  #       "steps": getattr(self.env, "steps", 0), 
+  #       "answer": getattr(self.env, "answer", None),
+  #       "question": self.data[self.data_idx][0], 
+  #       "fever_split": self.split
+  #     }
 
-  def get_reward(self, info):
-    if info['answer'] is not None:
-      pred = normalize_answer(self.data[self.data_idx][1])
-      gt = normalize_answer(info['answer'])
-      score = (pred == gt)
-      return int(score)
-    return 0
+
+  # def get_reward(self, info):
+  #   if info['answer'] is not None:
+  #     pred = normalize_answer(self.data[self.data_idx][1])
+  #     gt = normalize_answer(info['answer'])
+  #     score = (pred == gt)
+  #     return int(score)
+  #   return 0
   
   def get_metrics(self, info):
     if info['answer'] is not None:
@@ -139,7 +147,7 @@ class HotPotQAWrapper(gym.Wrapper):
 class FeverWrapper(gym.Wrapper):
   def __init__(self, env, split):
     super().__init__(env)
-    
+    # self.steps = 0
     data_path = f"./data/{FEVER_SPLIT_FILE[split]}"
     with open(data_path, "r") as json_file:
       json_list = list(json_file)
@@ -169,8 +177,8 @@ class FeverWrapper(gym.Wrapper):
 
   def _get_info(self):
     return {
-      "steps": self.steps, 
-      "answer": self.answer,
+      "steps": getattr(self.env, "steps", 0), 
+      "answer": getattr(self.env, "answer", None),
       "question": self.data[self.data_idx][0], 
       "fever_split": self.split
     }
